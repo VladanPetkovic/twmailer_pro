@@ -155,9 +155,8 @@ QUIT
 If the date or time (check logMessage()-function) output (server-side) is wrong input following commands:
 ```
 sudo apt-get install ntp
-sudo service ntp stop
-sudo ntpdate -s time.nist.gov
-sudo service ntp start
+sudo apt-get install ntpdate
+sudo ntpdate ntp.ubuntu.com
 ```
 ### -lldap and -llber not installed
 If LDAP-libraries are not installed, you will get an error.
