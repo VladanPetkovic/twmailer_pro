@@ -23,6 +23,11 @@ MailServer::MailServer(int port)
     }
     /****************************************************************************************/
 
+    // start ldap server
+    this->ldap_server = Ldap_fh();
+
+    /****************************************************************************************/
+
     this->server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (this->server_socket == -1)
     {
@@ -63,6 +68,9 @@ MailServer::~MailServer()
     {
         close(this->server_socket);
     }
+
+    // closing ldap_server entirely
+    this->ldap_server.~Ldap_fh();
 
     // close and remove "output_semaphore"
     sem_close(this->semaphore);
@@ -105,18 +113,7 @@ void MailServer::logMessage(const std::string & msg = "")
     sem_post(this->semaphore);
 }
 void MailServer::handleClient(int client_socket) 
-{
-    // sem_t *semaphore = sem_open("/twmailerServerSemaphore", 0);
-    // if (semaphore == SEM_FAILED)
-    // {
-    //     perror("Error opening semaphore in child process");
-    //     close(client_socket);
-    //     exit(EXIT_FAILURE);
-    // }
-
-    // // Acquire semaphore before accessing shared resources
-    // sem_wait(semaphore);
-    
+{    
     int size = 0;
     do 
     {
@@ -163,14 +160,6 @@ void MailServer::handleClient(int client_socket)
         } 
 
    } while (strcmp(this->buffer, "QUIT") != 0);
-
-//    // Release semaphore after done
-//     sem_post(semaphore);
-
-//     // Cleanup
-//     sem_close(semaphore);
-//     close(client_socket);
-
 }
 void MailServer::handleLogin(int client_socket)
 {
@@ -196,7 +185,7 @@ void MailServer::handleLogin(int client_socket)
             return;
         }
 
-        if (authenticateWithLDAP(username, password))
+        if (this->ldap_server.authenticateWithLdap(username, password))
         {
             logMessage("User authenticated with LDAP.");
             new_buffer = "OK\n";
@@ -218,9 +207,11 @@ void MailServer::handleLogin(int client_socket)
 }
 bool MailServer::isUserBlacklisted(const std::string& username, const std::string& ip)
 {
-    if (loginAttempts.count(username) > 0) {
+    if (loginAttempts.count(username) > 0)
+    {
         auto& attempt = loginAttempts[username];
-        if (difftime(std::time(nullptr), attempt.lastAttemptTime) < 60 && attempt.attempts >= 3 && attempt.ip == ip) {
+        if (difftime(std::time(nullptr), attempt.lastAttemptTime) < 60 && attempt.attempts >= 3 && attempt.ip == ip)
+        {
             return true;
         }
     }
@@ -264,84 +255,6 @@ std::string MailServer::getClientIP(int client_socket)
         return std::string(clientip);
     }
     return "";
-}
-bool MailServer::authenticateWithLDAP(const std::string& username, const std::string& password)
-{
-    LDAP *ldap = nullptr;
-    LDAPMessage *searchResult = nullptr;
-    int connectResult;
-
-    try
-    {
-        // Initialize LDAP connection
-        connectResult = ldap_initialize(&ldap, "ldap://ldap.technikum.wien.at:389");
-        if (connectResult != LDAP_SUCCESS)
-        {
-            logMessage("LDAP connection failed.");
-            throw std::runtime_error("LDAP connection initialization failed");
-        }
-
-        // Set LDAP version
-        int ldapVersion = LDAP_VERSION3;
-        ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &ldapVersion);
-
-        // Bind anonymously to perform search
-        connectResult = ldap_sasl_bind_s(ldap, NULL, LDAP_SASL_SIMPLE, NULL, NULL, NULL, NULL);
-        if (connectResult != LDAP_SUCCESS)
-        {
-            throw std::runtime_error("LDAP anonymous bind failed");
-        }
-
-        // Search for the user
-        std::string searchFilter = "(uid=" + username + ")";
-        connectResult = ldap_search_ext_s(ldap, "dc=technikum-wien,dc=at", LDAP_SCOPE_SUBTREE,
-                                          searchFilter.c_str(), NULL, 0, NULL, NULL, NULL, LDAP_NO_LIMIT, &searchResult);
-
-        if (connectResult != LDAP_SUCCESS)
-        {
-            throw std::runtime_error("LDAP search failed");
-        }
-
-        // Check if user exists and get DN
-        LDAPMessage *entry = ldap_first_entry(ldap, searchResult);
-        if (entry == NULL)
-        {
-            throw std::runtime_error("User not found in LDAP");
-        }
-
-        char *userDN = ldap_get_dn(ldap, entry);
-        if (userDN == NULL)
-        {
-            throw std::runtime_error("Failed to get user DN");
-        }
-
-        // Attempt to bind as the user
-        struct berval cred;
-        cred.bv_val = const_cast<char*>(password.c_str());
-        cred.bv_len = password.length();
-
-        // Attempt to bind as the user
-        connectResult = ldap_sasl_bind_s(ldap, userDN, LDAP_SASL_SIMPLE, &cred, NULL, NULL, NULL);
-        ldap_memfree(userDN);
-
-        if (connectResult != LDAP_SUCCESS)
-        {
-            throw std::runtime_error("LDAP user bind failed");
-        }
-
-        // Successful authentication
-        return true;
-    }
-    catch (const std::exception& e)
-    {
-        logMessage(std::string("LDAP authentication error: ") + e.what());
-    }
-    
-    // Free LDAP resources in all scenarios
-    if (searchResult) ldap_msgfree(searchResult);
-    if (ldap) ldap_unbind_ext_s(ldap, NULL, NULL);
-
-    return false;
 }
 void MailServer::handleSend(int client_socket)
 {

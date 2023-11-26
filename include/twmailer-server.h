@@ -19,6 +19,7 @@
 #include <fcntl.h>          // needed for Semaphores
 #include <ldap.h>           // LDAP-integration
 #include <map>
+#include "ldap_fh.h"        // including costum ldap class
 
 
 class MailServer {
@@ -55,6 +56,7 @@ private:
     struct sockaddr_in server_addr;
     std::string message_store;
     sem_t* semaphore;
+    Ldap_fh ldap_server;
     
     void handleLogin(int client_socket);
     void handleSend(int client_socket);                             // process "SEND"
@@ -68,7 +70,6 @@ private:
     int getMaxMessageNumber(std::string username);                  // returns the max. Msg-number of one user --> make unique msg-numbers
     int getMessageNumber(int startOfMessageNumber);                 // returns Msg-number, which was submitted by user, from buffer
     bool createAndWriteFile(std::string sender, std::string receiver);  //creating and writing file
-    bool authenticateWithLDAP(const std::string& username, const std::string& password);
     void updateLoginAttempt(const std::string& username, const std::string& ip);
     std::string getClientIP(int client_socket);
     bool isUserBlacklisted(const std::string& username, const std::string& ip);

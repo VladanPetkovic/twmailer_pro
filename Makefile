@@ -15,10 +15,10 @@ all: twmailer-client twmailer-server
 
 # .cpp files into .o object files and then links these object files to produce the executables
 twmailer-client: client-main.o twmailer-client.o
-	$(CXX) $(CXXFLAGS) obj/client-main.o obj/twmailer-client.o -o $@ $(LIBS)
+	$(CXX) $(CXXFLAGS) obj/client-main.o obj/twmailer-client.o -o $@
 
-twmailer-server: server-main.o twmailer-server.o
-	$(CXX) $(CXXFLAGS) obj/server-main.o obj/twmailer-server.o -o $@ $(LIBS)
+twmailer-server: server-main.o twmailer-server.o ldap_fh.o
+	$(CXX) $(CXXFLAGS) obj/server-main.o obj/twmailer-server.o obj/ldap_fh.o -o $@ $(LIBS)
 
 client-main.o: src/client-main.cpp
 	$(CXX) $(CXXFLAGS) -c src/client-main.cpp -o obj/client-main.o
@@ -31,6 +31,9 @@ twmailer-client.o: src/twmailer-client.cpp include/twmailer-client.h
 
 twmailer-server.o: src/twmailer-server.cpp include/twmailer-server.h
 	$(CXX) $(CXXFLAGS) -c $< -o obj/twmailer-server.o
+
+ldap_fh.o: src/ldap_fh.cpp include/ldap_fh.h
+	$(CXX) $(CXXFLAGS) -c $< -o obj/ldap_fh.o
 
 clean:
 	rm -f twmailer-client twmailer-server obj/*.o

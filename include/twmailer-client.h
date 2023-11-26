@@ -13,8 +13,7 @@ class MailClient {
 public:
     MailClient(const std::string& ip, int port);
     ~MailClient();
-    void run();  
-                                               // disponent for SEND, LIST, READ, DEL
+    void run();                                             // disponent for SEND, LIST, READ, DEL
 
 private:
     char* buffer;

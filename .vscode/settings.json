@@ -105,6 +105,7 @@
     "streambuf": "cpp",
     "typeinfo": "cpp",
     "fstream": "cpp",
-    "chrono": "cpp"
+    "chrono": "cpp",
+    "map": "cpp"
   }
 }
