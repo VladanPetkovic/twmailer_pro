@@ -166,6 +166,7 @@ void MailServer::handleLogin(int client_socket)
     std::string new_buffer;     // we do not use our this->buffer, because we are sending only 5 bytes
     std::string username;
     std::string password;
+    std::string client_ip = getClientIP(client_socket);
 
     if(this->buffer == nullptr) // buffer is empty
     {
@@ -174,28 +175,25 @@ void MailServer::handleLogin(int client_socket)
     else                        // buffer is not empty
     {
         username = getSenderOrReceiver(getStartPosOfString(SENDER));    // getting the string after first \n
-        password = getSenderOrReceiver(getStartPosOfString(RECEIVER));  // getting the string after second \n     
-        
-        std::string clientIP = getClientIP(client_socket);
+        password = getSenderOrReceiver(getStartPosOfString(RECEIVER));  // getting the string after second \n
 
-        if (isUserBlacklisted(username, clientIP))
+        if(this->ldap_server.isUserBlacklisted(username, client_ip))         // user is blacklisted
         {
             logMessage("User " + username + " temporarily blacklisted.");
-            sendErrorResponse(client_socket, "ERR\n");
+            new_buffer = "ERR\n";
             return;
         }
-
-        if (this->ldap_server.authenticateWithLdap(username, password))
+        else if(this->ldap_server.authenticateWithLdap(username, password)) // user authenticated successfully
         {
             logMessage("User authenticated with LDAP.");
             new_buffer = "OK\n";
-            resetLoginAttempt(username);
+            this->ldap_server.resetLoginAttempt(username, client_ip);
         }
-        else
+        else                                                                // user-authentication failed
         {
             logMessage("LDAP authentication failed.");
             new_buffer = "ERR\n";
-            updateLoginAttempt(username, clientIP);
+            this->ldap_server.updateLoginAttempt(username, client_ip);
         }
     }
     
@@ -204,44 +202,6 @@ void MailServer::handleLogin(int client_socket)
     {
         perror("Send error");
     }
-}
-bool MailServer::isUserBlacklisted(const std::string& username, const std::string& ip)
-{
-    if (loginAttempts.count(username) > 0)
-    {
-        auto& attempt = loginAttempts[username];
-        if (difftime(std::time(nullptr), attempt.lastAttemptTime) < 60 && attempt.attempts >= 3 && attempt.ip == ip)
-        {
-            return true;
-        }
-    }
-    return false;
-}
-void MailServer::resetLoginAttempt(const std::string& username)
-{
-    loginAttempts.erase(username);
-}
-void MailServer::sendErrorResponse(int client_socket, const std::string& message)
-{
-    if (send(client_socket, message.c_str(), message.size(), 0) == -1)
-    {
-        perror("Error: Send error");
-    }
-}
-void MailServer::updateLoginAttempt(const std::string& username, const std::string& ip)
-{
-    auto& attempt = loginAttempts[username];
-    attempt.ip = ip;
-
-    if (difftime(std::time(nullptr), attempt.lastAttemptTime) > 60)
-    {
-        attempt.attempts = 1;
-    } 
-    else 
-    {
-        attempt.attempts++;
-    }
-    attempt.lastAttemptTime = std::time(nullptr);
 }
 std::string MailServer::getClientIP(int client_socket)
 {

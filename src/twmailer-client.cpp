@@ -116,25 +116,29 @@ void MailClient::run()
 }
 bool MailClient::handleLogin()
 {
+    std::string username;
     std::string password;
+
     // INPUT
     std::cout << "\nUsername: ";
-    std::cin >> this->username;
+    std::cin >> username;
     std::cout << "Password: ";
     std::cin >> password;
 
     std::cin.ignore(); // Flush newline from buffer
-    // if((!isValidUsername(this->username))) // NOT NEEDED
-    // {
-    //     std::cout   << "Username is not valid:" << std::endl
-    //                 << "\tUse only lowercase letters (a-z) and/or digits (0-9)" << std::endl
-    //                 << "\tMax. length: 8 chars!" << std::endl;
-    //     return false;
-    // }
+
+    // checking if inputted username is valid
+    if((!isValidUsername(username)))
+    {
+        std::cout   << "Username is not valid:" << std::endl
+                    << "\tUse only lowercase letters (a-z) and/or digits (0-9)" << std::endl
+                    << "\tMax. length: 8 chars!" << std::endl;
+        return false;
+    }
 
     // SENDING
     strcpy(this->buffer, "LOGIN\n");
-    strcat(this->buffer, this->username.c_str());
+    strcat(this->buffer, username.c_str());
     strcat(this->buffer, "\n");
     strcat(this->buffer, password.c_str());
     strcat(this->buffer, "\n");
@@ -158,18 +162,16 @@ bool MailClient::handleLogin()
 }
 void MailClient::handleSend()
 {
-    std::string sender, receiver, subject, message, send_buffer;
+    std::string receiver, subject, message, send_buffer;
 
     // INPUT
-    std::cout << "Sender: ";
-    std::cin >> sender;
     std::cout << "Receiver: ";
     std::cin >> receiver;
 
     std::cin.ignore(); // Flush newline from buffer
-    if((!isValidUsername(sender)) || (!isValidUsername(receiver)))  // checking input
+    if((!isValidUsername(receiver)))  // checking input
     {
-        std::cout   << "One of the usernames is not valid:" << std::endl
+        std::cout   << "Username of receiver is not valid:" << std::endl
                     << "\tUse only lowercase letters (a-z) and/or digits (0-9)" << std::endl
                     << "\tMax. length: 8 chars!" << std::endl;
         return;
@@ -196,8 +198,6 @@ void MailClient::handleSend()
 
     // SENDING --> not beautiful, but we do not want to use additional storage
     strcpy(this->buffer, "SEND\n");
-    strcat(this->buffer, sender.c_str());
-    strcat(this->buffer, "\n");
     strcat(this->buffer, receiver.c_str());
     strcat(this->buffer, "\n");
     strcat(this->buffer, subject.c_str());
@@ -222,22 +222,8 @@ void MailClient::handleSend()
 }
 void MailClient::handleList()
 {
-    std::string username;
-
-    // INPUT
-    std::cout << "Username: ";
-    std::cin >> username;
-    std::cin.ignore(); // Flush newline from buffer
-    if(!isValidUsername(username))  // checks if username is valid
-    {
-        std::cout   << "One of the usernames is not valid:" << std::endl
-                    << "\tUse only lowercase letters (a-z) and/or digits (0-9)" << std::endl
-                    << "\tMax. length: 8 chars!" << std::endl;
-        return;
-    }
-
     // SENDING
-    std::string send_buffer = "LIST\n" + username + "\n";
+    std::string send_buffer = "LIST\n";
     writeToSocket(send_buffer.c_str(), send_buffer.size());
 
     // READING
@@ -248,14 +234,11 @@ void MailClient::handleList()
 }
 void MailClient::handleRead()
 {
-    std::string username;
     int msg_num;
     std::string output[4] = {"Sender", "Receiver", "Subject", "Message"};
     int outputCount = 0;
 
     // INPUT
-    std::cout << "Username: ";
-    std::cin >> username;
     std::cout << "Message Number: ";
     if(!(std::cin >> msg_num))  // checks if string is submitted
     {
@@ -265,16 +248,9 @@ void MailClient::handleRead()
         return;
     }
     std::cin.ignore(); // Flush newline from buffer
-    if(!isValidUsername(username))  // checks if username is valid
-    {
-        std::cout   << "One of the usernames is not valid:" << std::endl
-                    << "\tUse only lowercase letters (a-z) and/or digits (0-9)" << std::endl
-                    << "\tMax. length: 8 chars!" << std::endl;
-        return;
-    }
 
     // SENDING
-    std::string send_buffer = "READ\n" + username + "\n" + std::to_string(msg_num) + "\n";
+    std::string send_buffer = "READ\n" + std::to_string(msg_num) + "\n";
     writeToSocket(send_buffer.c_str(), send_buffer.size());
 
     // READING
@@ -300,12 +276,9 @@ void MailClient::handleRead()
 }
 void MailClient::handleDel()
 {
-    std::string username;
     int msg_num;
 
     // INPUT
-    std::cout << "Username: ";
-    std::cin >> username;
     std::cout << "Message Number: ";
     if(!(std::cin >> msg_num))  // checks if string is submitted
     {
@@ -315,16 +288,9 @@ void MailClient::handleDel()
         return;
     }
     std::cin.ignore(); // Flush newline from buffer
-    if(!isValidUsername(username))  // checks if username is valid
-    {
-        std::cout   << "One of the usernames is not valid:" << std::endl
-                    << "\tUse only lowercase letters (a-z) and/or digits (0-9)" << std::endl
-                    << "\tMax. length: 8 chars!" << std::endl;
-        return;
-    }
 
     // SENDING
-    std::string send_buffer = "DEL\n" + username + "\n" + std::to_string(msg_num) + "\n";
+    std::string send_buffer = "DEL\n" + std::to_string(msg_num) + "\n";
     writeToSocket(send_buffer.c_str(), send_buffer.size());
 
     // READING

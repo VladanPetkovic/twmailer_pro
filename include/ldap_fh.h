@@ -15,10 +15,25 @@ public:
     Ldap_fh();
     virtual ~Ldap_fh();
     void logMessage(const std::string & msg);
-    bool authenticateWithLdap(const std::string& username, const std::string& password);
+    bool authenticateWithLdap(const std::string & username, const std::string & password);
+    bool isUserBlacklisted(const std::string & username, const std::string & ip);
+    int getLoginAttempts(const std::string & username, const std::string & ip);
+    void updateLoginAttempt(const std::string & username, const std::string & ip);
+    void resetLoginAttempt(const std::string & username, const std::string & ip);
+
+    struct LoginAttempt 
+    {
+        std::string ip;
+        int attempts;
+        std::time_t lastAttemptTime;
+    };
 
 private:
+    std::string username;
+    std::string ip;
     sem_t* semaphore;
+    std::string blacklist = "blacklist/blacklist.txt";
+    std::string blacklist_log = "blacklist/blacklist_log.txt";
     
 };
 

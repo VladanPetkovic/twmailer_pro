@@ -18,7 +18,6 @@ public:
 private:
     char* buffer;
     int client_socket;
-    std::string username;
 
     void writeToSocket(const char* buffer, size_t size);    // writing to socket
     void readFromSocket();                                  // reading from socket

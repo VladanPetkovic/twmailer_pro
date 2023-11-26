@@ -4,14 +4,6 @@ int main(int argc, char * argv[])
 {
     /****************************************************************************************/
     // not enough arguments passed
-
-    // // Initialize semaphore
-    // sem_t *semaphore = sem_open("/twmailerServerSemaphore", O_CREAT, 0644, 1);
-    // if (semaphore == SEM_FAILED) {
-    //     perror("Error initializing semaphore");
-    //     exit(EXIT_FAILURE);
-    // }
-
     if (argc != 3)
     {
         std::cerr << "Usage: ./twmailer-server <port> <mail-spool-directoryname>" << std::endl;
@@ -59,28 +51,22 @@ int main(int argc, char * argv[])
             children.push_back(pid);
         }
         else
-        {   
-            // sem_wait(semaphore); // Acquire semaphore
-
+        {
             server.logMessage("Client connected.");
             server.handleClient(client_socket);
             server.logMessage("Closing client connection.");
 
-            // sem_post(semaphore); // Release semaphore
             close(client_socket);
             exit(EXIT_SUCCESS);
         }
     }
 
     // parent-process waits for children-process to finish
-    for (const pid_t & child: children) {
+    for (const pid_t & child: children)
+    {
         waitpid(child, nullptr, 0);
     }
     close(server.getServerSocket());
-
-    // // Clean semaphores
-    // sem_close(semaphore);
-    // sem_unlink("/twmailerServerSemaphore");
 
     return 0;
 }

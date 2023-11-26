@@ -24,14 +24,6 @@
 
 class MailServer {
 
-    enum LineBreakCount     // needed for finding sender, subject,... in this->buffer
-    {
-        SENDER = 1,         // for example: sender comes after 1 linebreak
-        RECEIVER = 2,       // receiver after two,...
-        SUBJECT = 3,
-        MESSAGE = 4
-    };
-
 public:
     MailServer(int port);
     ~MailServer();
@@ -42,11 +34,12 @@ public:
     bool storeMessage(std::string sender, std::string receiver);    // storing a message one user has send
     void checkDirectory(const std::string & message_store);         // checking if passed message_store exists
 
-    struct LoginAttempt 
+    enum LineBreakCount     // needed for finding sender, subject,... in this->buffer
     {
-        std::string ip;
-        int attempts;
-        std::time_t lastAttemptTime;
+        SENDER = 1,         // for example: sender comes after 1 linebreak
+        RECEIVER = 2,       // receiver after two,...
+        SUBJECT = 3,
+        MESSAGE = 4
     };
 
 private:
@@ -70,12 +63,7 @@ private:
     int getMaxMessageNumber(std::string username);                  // returns the max. Msg-number of one user --> make unique msg-numbers
     int getMessageNumber(int startOfMessageNumber);                 // returns Msg-number, which was submitted by user, from buffer
     bool createAndWriteFile(std::string sender, std::string receiver);  //creating and writing file
-    void updateLoginAttempt(const std::string& username, const std::string& ip);
-    std::string getClientIP(int client_socket);
-    bool isUserBlacklisted(const std::string& username, const std::string& ip);
-    void resetLoginAttempt(const std::string& username);
-    void sendErrorResponse(int client_socket, const std::string& message);
-    std::map<std::string, LoginAttempt> loginAttempts;
+    std::string getClientIP(int client_socket);                     // returns client-ip
 };
 
 #endif // TWMAILER_SERVER_H

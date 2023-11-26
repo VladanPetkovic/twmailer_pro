@@ -116,3 +116,31 @@ bool Ldap_fh::authenticateWithLdap(const std::string& username, const std::strin
 
     return false;
 }
+bool Ldap_fh::isUserBlacklisted(const std::string& username, const std::string& ip)
+{
+    return false;
+}
+int Ldap_fh::getLoginAttempts(const std::string & username, const std::string & ip)
+{
+
+}
+void Ldap_fh::updateLoginAttempt(const std::string & username, const std::string & ip)
+{
+    // get attempt
+    int attempt;
+    // attempt.ip = ip;
+
+    // if (difftime(std::time(nullptr), attempt.lastAttemptTime) > 60)
+    // {
+    //     attempt.attempts = 1;
+    // } 
+    // else 
+    // {
+    //     attempt.attempts++;
+    // }
+    // attempt.lastAttemptTime = std::time(nullptr);
+}
+void Ldap_fh::resetLoginAttempt(const std::string& username, const std::string & ip)
+{
+    
+}
