@@ -2,6 +2,7 @@
 #define LDAP_FH_H
 
 #include <iostream>         // in - and output (and debug-messages)
+#include <fstream>          // for file operations
 #include <string>           // easy string handling
 #include <cstring>          // strcpy() strlen() ...
 #include <ldap.h>           // LDAP-integration
@@ -9,32 +10,28 @@
 #include <semaphore.h>      // needed for synchronization of processes
 #include <fcntl.h>          // needed for Semaphores
 
+struct SessionData 
+{
+    std::string username;
+    std::string ip;
+};
 
 class Ldap_fh {
 public:
     Ldap_fh();
+    Ldap_fh(sem_t* semaphore);
     virtual ~Ldap_fh();
     void logMessage(const std::string & msg);
     bool authenticateWithLdap(const std::string & username, const std::string & password);
-    bool isUserBlacklisted(const std::string & username, const std::string & ip);
-    int getLoginAttempts(const std::string & username, const std::string & ip);
-    void updateLoginAttempt(const std::string & username, const std::string & ip);
-    void resetLoginAttempt(const std::string & username, const std::string & ip);
-
-    struct LoginAttempt 
-    {
-        std::string ip;
-        int attempts;
-        std::time_t lastAttemptTime;
-    };
+    bool isUserBlacklisted(SessionData & sessionInfo);
+    int getLoginAttempts(SessionData & sessionInfo);
+    void updateLoginAttempt(SessionData & sessionInfo);
+    void resetLoginAttempt(SessionData & sessionInfo);
 
 private:
-    std::string username;
-    std::string ip;
     sem_t* semaphore;
     std::string blacklist = "blacklist/blacklist.txt";
     std::string blacklist_log = "blacklist/blacklist_log.txt";
-    
 };
 
 #endif // LDAP_FH_H

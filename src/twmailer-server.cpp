@@ -24,7 +24,7 @@ MailServer::MailServer(int port)
     /****************************************************************************************/
 
     // start ldap server
-    this->ldap_server = Ldap_fh();
+    this->ldap_server = Ldap_fh(this->semaphore);
 
     /****************************************************************************************/
 
@@ -113,8 +113,9 @@ void MailServer::logMessage(const std::string & msg = "")
     sem_post(this->semaphore);
 }
 void MailServer::handleClient(int client_socket) 
-{    
+{
     int size = 0;
+    SessionData sessionInfo;
     do 
     {
         // handle receive errors
@@ -136,7 +137,7 @@ void MailServer::handleClient(int client_socket)
         // receiving LOGIN
         if(strncmp(this->buffer, "LOGIN", 5) == 0)
         {
-            handleLogin(client_socket);
+            handleLogin(client_socket, sessionInfo);
         }
         // receiving SEND
         else if(strncmp(this->buffer, "SEND", 4) == 0)
@@ -161,12 +162,11 @@ void MailServer::handleClient(int client_socket)
 
    } while (strcmp(this->buffer, "QUIT") != 0);
 }
-void MailServer::handleLogin(int client_socket)
+void MailServer::handleLogin(int client_socket, SessionData & sessionInfo)
 {
     std::string new_buffer;     // we do not use our this->buffer, because we are sending only 5 bytes
-    std::string username;
     std::string password;
-    std::string client_ip = getClientIP(client_socket);
+    sessionInfo.ip = getClientIP(client_socket);
 
     if(this->buffer == nullptr) // buffer is empty
     {
@@ -174,26 +174,26 @@ void MailServer::handleLogin(int client_socket)
     } 
     else                        // buffer is not empty
     {
-        username = getSenderOrReceiver(getStartPosOfString(SENDER));    // getting the string after first \n
+        sessionInfo.username = getSenderOrReceiver(getStartPosOfString(SENDER));    // getting the string after first \n
         password = getSenderOrReceiver(getStartPosOfString(RECEIVER));  // getting the string after second \n
 
-        if(this->ldap_server.isUserBlacklisted(username, client_ip))         // user is blacklisted
+        if(this->ldap_server.isUserBlacklisted(sessionInfo))         // user is blacklisted
         {
-            logMessage("User " + username + " temporarily blacklisted.");
+            logMessage("User " + sessionInfo.username + " temporarily blacklisted.");
             new_buffer = "ERR\n";
             return;
         }
-        else if(this->ldap_server.authenticateWithLdap(username, password)) // user authenticated successfully
+        else if(this->ldap_server.authenticateWithLdap(sessionInfo.username, password)) // user authenticated successfully
         {
             logMessage("User authenticated with LDAP.");
             new_buffer = "OK\n";
-            this->ldap_server.resetLoginAttempt(username, client_ip);
+            this->ldap_server.resetLoginAttempt(sessionInfo.username, client_ip);
         }
         else                                                                // user-authentication failed
         {
             logMessage("LDAP authentication failed.");
             new_buffer = "ERR\n";
-            this->ldap_server.updateLoginAttempt(username, client_ip);
+            this->ldap_server.updateLoginAttempt(sessionInfo.username, client_ip);
         }
     }
     

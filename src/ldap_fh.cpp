@@ -2,27 +2,15 @@
 
 Ldap_fh::Ldap_fh()
 {
-    /****************************************************************************************/
-    // init semaphore for synchronization of output of multiple processes to the cmd
-    sem_unlink("output_ldap_semaphore"); // deleting named semaphore, if some exists
-    this->semaphore = sem_open("output_ldap_semaphore", O_CREAT | O_EXCL, 0644, 1);
-            // control_semaphore = name of semaphore
-            // O_CREAT = the semaphore should be created, if it didn't exist
-            // O_EXCL = combination with O_CREAT
-            // 0644 = permission mode of semaphore
-            // 1 = semaphore is unlocked
-    if(this->semaphore == SEM_FAILED)
-    {
-        perror("sem_open");
-        exit(EXIT_FAILURE);
-    }
-    /****************************************************************************************/
+
+}
+Ldap_fh::Ldap_fh(sem_t* semaphore)
+{
+    this->semaphore = semaphore;
 }
 Ldap_fh::~Ldap_fh()
 {
-    // close and remove "output_semaphore"
-    sem_close(this->semaphore);
-    sem_unlink("output_ldap_semaphore");
+
 }
 void Ldap_fh::logMessage(const std::string & msg = "")
 {
@@ -116,15 +104,15 @@ bool Ldap_fh::authenticateWithLdap(const std::string& username, const std::strin
 
     return false;
 }
-bool Ldap_fh::isUserBlacklisted(const std::string& username, const std::string& ip)
+bool Ldap_fh::isUserBlacklisted(SessionData & sessionInfo)
 {
     return false;
 }
-int Ldap_fh::getLoginAttempts(const std::string & username, const std::string & ip)
+int Ldap_fh::getLoginAttempts(SessionData & sessionInfo)
 {
 
 }
-void Ldap_fh::updateLoginAttempt(const std::string & username, const std::string & ip)
+void Ldap_fh::updateLoginAttempt(SessionData & sessionInfo)
 {
     // get attempt
     int attempt;
@@ -139,8 +127,33 @@ void Ldap_fh::updateLoginAttempt(const std::string & username, const std::string
     //     attempt.attempts++;
     // }
     // attempt.lastAttemptTime = std::time(nullptr);
+
+    std::fstream file_blacklist(this->blacklist);
+    std::fstream file_blacklist_log(this->blacklist_log);
+    // opening and writing file
+    if(file_blacklist.is_open())
+    {
+        // search for username and ip
+        
+        file << sender << "\n" << receiver << "\n";
+        // write Subject
+        for(    int i = startPosOfSubject; 
+                this->buffer[i] != '\0' && i < getStartPosOfString(MESSAGE) - 1; i++)
+        {
+            file << buffer[i];
+        }
+        file << "\n";
+
+        // write Message
+        for(    int i = startPosOfMessage; 
+                this->buffer[i] != '\0' && i < getEndPosOfMessage(startPosOfMessage); i++)
+        {
+            file << buffer[i];
+        }
+        file.close();
+    }
 }
-void Ldap_fh::resetLoginAttempt(const std::string& username, const std::string & ip)
+void Ldap_fh::resetLoginAttempt(SessionData & sessionInfo)
 {
     
 }

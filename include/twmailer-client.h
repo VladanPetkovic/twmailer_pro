@@ -8,6 +8,7 @@
 #include <cerrno>           // errno variables 
 #include <arpa/inet.h>      // for ip addresses
 #include <unistd.h>         // read() write() close() ...
+#include <termios.h>        // used for secure password input
 
 class MailClient {
 public:
@@ -27,6 +28,8 @@ private:
     void handleRead();                                      // process "READ"
     void handleDel();                                       // process "DEL"
     bool isValidUsername(const std::string & username);     // returns if username is valid --> fun with ascii representation
+    int getch();                                            // used from provided ldap project - moodle
+    const char* getpass();                                  // used from provided ldap project - moodle
 };
 
 #endif // TWMAILER_CLIENT_H

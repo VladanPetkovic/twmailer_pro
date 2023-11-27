@@ -42,6 +42,12 @@ public:
         MESSAGE = 4
     };
 
+    struct SessionData 
+    {
+        std::string username;
+        std::string ip;
+    };
+
 private:
     char* buffer;
     int server_socket = -1;
@@ -51,7 +57,7 @@ private:
     sem_t* semaphore;
     Ldap_fh ldap_server;
     
-    void handleLogin(int client_socket);
+    void handleLogin(int client_socket, SessionData & sessionInfo);// process "LOGIN"
     void handleSend(int client_socket);                             // process "SEND"
     void handleList(int client_socket);                             // process "LIST"
     void handleRead(int client_socket);                             // process "READ"
