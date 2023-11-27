@@ -177,7 +177,7 @@ void MailServer::handleLogin(int client_socket, SessionData & sessionInfo)
         sessionInfo.username = getSenderOrReceiver(getStartPosOfString(SENDER));    // getting the string after first \n
         password = getSenderOrReceiver(getStartPosOfString(RECEIVER));  // getting the string after second \n
 
-        if(this->ldap_server.isUserBlacklisted(sessionInfo))         // user is blacklisted
+        if(this->ldap_server.isUserBlacklisted(sessionInfo.username, sessionInfo.ip))         // user is blacklisted
         {
             logMessage("User " + sessionInfo.username + " temporarily blacklisted.");
             new_buffer = "ERR\n";
@@ -187,13 +187,13 @@ void MailServer::handleLogin(int client_socket, SessionData & sessionInfo)
         {
             logMessage("User authenticated with LDAP.");
             new_buffer = "OK\n";
-            this->ldap_server.resetLoginAttempt(sessionInfo.username, client_ip);
+            this->ldap_server.resetLoginAttempt(sessionInfo.username, sessionInfo.ip);
         }
         else                                                                // user-authentication failed
         {
             logMessage("LDAP authentication failed.");
             new_buffer = "ERR\n";
-            this->ldap_server.updateLoginAttempt(sessionInfo.username, client_ip);
+            this->ldap_server.updateLoginAttempt(sessionInfo.username, sessionInfo.ip);
         }
     }
     

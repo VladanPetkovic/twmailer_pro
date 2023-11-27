@@ -10,12 +10,6 @@
 #include <semaphore.h>      // needed for synchronization of processes
 #include <fcntl.h>          // needed for Semaphores
 
-struct SessionData 
-{
-    std::string username;
-    std::string ip;
-};
-
 class Ldap_fh {
 public:
     Ldap_fh();
@@ -23,10 +17,10 @@ public:
     virtual ~Ldap_fh();
     void logMessage(const std::string & msg);
     bool authenticateWithLdap(const std::string & username, const std::string & password);
-    bool isUserBlacklisted(SessionData & sessionInfo);
-    int getLoginAttempts(SessionData & sessionInfo);
-    void updateLoginAttempt(SessionData & sessionInfo);
-    void resetLoginAttempt(SessionData & sessionInfo);
+    bool isUserBlacklisted(const std::string & username, const std::string & ip);
+    int getLoginAttempts(const std::string & username, const std::string & ip);
+    void updateLoginAttempt(const std::string & username, const std::string & ip);
+    void resetLoginAttempt(const std::string & username, const std::string & ip);
 
 private:
     sem_t* semaphore;

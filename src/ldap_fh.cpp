@@ -104,18 +104,18 @@ bool Ldap_fh::authenticateWithLdap(const std::string& username, const std::strin
 
     return false;
 }
-bool Ldap_fh::isUserBlacklisted(SessionData & sessionInfo)
+bool Ldap_fh::isUserBlacklisted(const std::string & username, const std::string & ip)
 {
     return false;
 }
-int Ldap_fh::getLoginAttempts(SessionData & sessionInfo)
+int Ldap_fh::getLoginAttempts(const std::string & username, const std::string & ip)
 {
 
 }
-void Ldap_fh::updateLoginAttempt(SessionData & sessionInfo)
+void Ldap_fh::updateLoginAttempt(const std::string & username, const std::string & ip)
 {
-    // get attempt
     int attempt;
+    bool userFound = false;
     // attempt.ip = ip;
 
     // if (difftime(std::time(nullptr), attempt.lastAttemptTime) > 60)
@@ -128,32 +128,45 @@ void Ldap_fh::updateLoginAttempt(SessionData & sessionInfo)
     // }
     // attempt.lastAttemptTime = std::time(nullptr);
 
-    std::fstream file_blacklist(this->blacklist);
-    std::fstream file_blacklist_log(this->blacklist_log);
+    // read and write in file_blacklist
+    std::fstream file_blacklist(this->blacklist, std::ios::in | std::ios::out);
+    // only write in our logfile
+    std::ofstream file_blacklist_log(this->blacklist_log);
+
     // opening and writing file
     if(file_blacklist.is_open())
     {
         // search for username and ip
-        
-        file << sender << "\n" << receiver << "\n";
-        // write Subject
-        for(    int i = startPosOfSubject; 
-                this->buffer[i] != '\0' && i < getStartPosOfString(MESSAGE) - 1; i++)
+        std::string line;
+        std::streampos position = 0;
+        while (getline(file_blacklist, line))
         {
-            file << buffer[i];
+            position = file_blacklist.tellg();
+            if (line.find(username + "," + ip) != std::string::npos)
+            {
+                userFound = true;
+                break;
+            }
         }
-        file << "\n";
 
-        // write Message
-        for(    int i = startPosOfMessage; 
-                this->buffer[i] != '\0' && i < getEndPosOfMessage(startPosOfMessage); i++)
-        {
-            file << buffer[i];
-        }
-        file.close();
+        // moving the cursor to the position
+        file_blacklist.seekp(position);
+
+        // write username, ip, time, loginattempts
+        file_blacklist << username + "," 
+                        + ip + "," 
+                        + std::to_string(std::time(nullptr)) + ","
+                        + ;
+
+        // closing blacklist
+        file_blacklist.close();
+    }
+    else
+    {
+        std::cerr << "Failed to open the file." << std::endl;
     }
 }
-void Ldap_fh::resetLoginAttempt(SessionData & sessionInfo)
+void Ldap_fh::resetLoginAttempt(const std::string & username, const std::string & ip)
 {
     
 }
