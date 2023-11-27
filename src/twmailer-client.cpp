@@ -116,19 +116,21 @@ void MailClient::run()
 }
 bool MailClient::handleLogin()
 {
-    std::string username;
+    char username[9];
     std::string password;
 
     // INPUT
-    std::cout << "\nUsername: ";
-    std::cin >> username;
-    std::cout << "Password: ";
-    password = getpass();
+    printf("\nEnter username: ");
+    scanf("%8s", username);
 
-    std::cin.ignore(); // Flush newline from buffer
+    // flushing the input
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF);
+
+    password = getPassword();
 
     // checking if inputted username is valid
-    if((!isValidUsername(username)))
+    if((!isValidUsername(std::string(username))))
     {
         std::cout   << "Username is not valid:" << std::endl
                     << "\tUse only lowercase letters (a-z) and/or digits (0-9)" << std::endl
@@ -138,7 +140,7 @@ bool MailClient::handleLogin()
 
     // SENDING
     strcpy(this->buffer, "LOGIN\n");
-    strcat(this->buffer, username.c_str());
+    strcat(this->buffer, username);
     strcat(this->buffer, "\n");
     strcat(this->buffer, password.c_str());
     strcat(this->buffer, "\n");
@@ -330,70 +332,49 @@ bool MailClient::isValidUsername(const std::string & username)
 int MailClient::getch()            // used from ldap-project provided in moodle
 {
     int ch;
-    // https://man7.org/linux/man-pages/man3/termios.3.html
-    struct termios t_old, t_new;
-
-    // https://man7.org/linux/man-pages/man3/termios.3.html
-    // tcgetattr() gets the parameters associated with the object referred
-    //   by fd and stores them in the termios structure referenced by
-    //   termios_p
-    tcgetattr(STDIN_FILENO, &t_old);
-    
-    // copy old to new to have a base for setting c_lflags
-    t_new = t_old;
-
-    // https://man7.org/linux/man-pages/man3/termios.3.html
-    //
-    // ICANON Enable canonical mode (described below).
-    //   * Input is made available line by line (max 4096 chars).
-    //   * In noncanonical mode input is available immediately.
-    //
-    // ECHO   Echo input characters.
-    t_new.c_lflag &= ~(ICANON | ECHO);
-    
-    // sets the attributes
-    // TCSANOW: the change occurs immediately.
-    tcsetattr(STDIN_FILENO, TCSANOW, &t_new);
-
+    // struct to hold the terminal settings
+    struct termios old_settings, new_settings;
+    // take default setting in old_settings
+    tcgetattr(STDIN_FILENO, &old_settings);
+    // make of copy of it (Read my previous blog to know 
+    // more about how to copy struct)
+    new_settings = old_settings;
+    // change the settings for by disabling ECHO mode
+    // read man page of termios.h for more settings info
+    new_settings.c_lflag &= ~(ICANON | ECHO);
+    // apply these new settings
+    tcsetattr(STDIN_FILENO, TCSANOW, &new_settings);
+    // now take the input in this mode
     ch = getchar();
-
-    // reset stored attributes
-    tcsetattr(STDIN_FILENO, TCSANOW, &t_old);
-
+    // reset back to default settings
+    tcsetattr(STDIN_FILENO, TCSANOW, &old_settings);
     return ch;
 }
-const char* MailClient::getpass()      // used from ldap-project provided in moodle
+std::string MailClient::getPassword()
 {
-    int show_asterisk = 0;
+    char password[255];
+    int i = 0;
+    int ch;
 
-    const char BACKSPACE = 127;
-    const char RETURN = 10;
-
-    unsigned char ch = 0;
-    std::string password;
-
-    while ((ch = getch()) != RETURN)
+    printf("Enter password: ");
+    while ((ch = getch()) != '\n')
     {
-        if (ch == BACKSPACE)
-        {
-            if (password.length() != 0)
+        if (ch == 127 || ch == 8)
+        { // handle backspace
+            if (i != 0)
             {
-                if (show_asterisk)
-                {
-                    printf("\b \b"); // backslash: \b
-                }
-                password.resize(password.length() - 1);
+                i--;
+                printf("\b \b");
             }
         }
         else
         {
-            password += ch;
-            if (show_asterisk)
-            {
-                printf("*");
-            }
+            password[i++] = ch;
+            // echo the '*' to get feel of taking password 
+            printf("*");
         }
     }
-    printf("\n");
-    return password.c_str();
+    password[i] = '\0';
+
+    return std::string(password);
 }

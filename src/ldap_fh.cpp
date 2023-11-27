@@ -106,58 +106,115 @@ bool Ldap_fh::authenticateWithLdap(const std::string& username, const std::strin
 }
 bool Ldap_fh::isUserBlacklisted(const std::string & username, const std::string & ip)
 {
+    if(!isUserInBlacklist(username, ip))
+    {
+        return false;
+    } 
+    else
+    {
+        time_t attemptTime = getAttemptTime(username, ip);
+        
+        if(getAttemptTime(username, ip) == 3 && difftime(std::time(nullptr), attemptTime) >= 60)
+        {
+            updateLoginAttempt(username, ip, true);
+            return false;
+        }
+        else if(getAttemptTime(username, ip) == 3 && difftime(std::time(nullptr), attemptTime) < 60)
+        {
+            return true;
+        }
+    }
+
     return false;
 }
 int Ldap_fh::getLoginAttempts(const std::string & username, const std::string & ip)
 {
-
-}
-void Ldap_fh::updateLoginAttempt(const std::string & username, const std::string & ip)
-{
-    int attempt;
-    bool userFound = false;
-    // attempt.ip = ip;
-
-    // if (difftime(std::time(nullptr), attempt.lastAttemptTime) > 60)
-    // {
-    //     attempt.attempts = 1;
-    // } 
-    // else 
-    // {
-    //     attempt.attempts++;
-    // }
-    // attempt.lastAttemptTime = std::time(nullptr);
-
-    // read and write in file_blacklist
-    std::fstream file_blacklist(this->blacklist, std::ios::in | std::ios::out);
-    // only write in our logfile
-    std::ofstream file_blacklist_log(this->blacklist_log);
+    int prefixLength = username.length() + ip.length() + 3; // adding 3 for "," and ",:"
+    int attempts = 0;
+    // read file_blacklist
+    std::ifstream file_blacklist(this->blacklist, std::ios::in | std::ios::out);
 
     // opening and writing file
     if(file_blacklist.is_open())
     {
         // search for username and ip
         std::string line;
-        std::streampos position = 0;
-        while (getline(file_blacklist, line))
+        std::streampos positionTemp = 0;
+        std::size_t positionString;
+        while(getline(file_blacklist, line))
         {
-            position = file_blacklist.tellg();
-            if (line.find(username + "," + ip) != std::string::npos)
+            positionTemp = file_blacklist.tellg();
+            positionString = line.find(username + "," + ip);
+            if(positionString != std::string::npos)
             {
-                userFound = true;
+                file_blacklist.seekg(positionString + prefixLength, std::ios::beg);
+                // saving the number of attempts
+                file_blacklist >> attempts;
                 break;
             }
         }
+        
+        // closing blacklist
+        file_blacklist.close();
+    }
+    else
+    {
+        std::cerr << "Failed to open the file." << std::endl;
+    }
 
-        // moving the cursor to the position
-        file_blacklist.seekp(position);
+    return attempts;
+}
+time_t Ldap_fh::getAttemptTime(const std::string & username, const std::string & ip)
+{
+    int prefixLength = username.length() + ip.length() + 5; // adding 5 for "," and ",:" and "," and the attemptnumber
+    time_t attemptTime;
+    // read file_blacklist
+    std::ifstream file_blacklist(this->blacklist, std::ios::in | std::ios::out);
 
-        // write username, ip, time, loginattempts
+    // opening and writing file
+    if(file_blacklist.is_open())
+    {
+        // search for username and ip
+        std::string line;
+        std::streampos positionTemp = 0;
+        std::size_t positionString;
+        while(getline(file_blacklist, line))
+        {
+            positionTemp = file_blacklist.tellg();
+            positionString = line.find(username + "," + ip);
+            if(positionString != std::string::npos)
+            {
+                file_blacklist.seekg(positionString + prefixLength, std::ios::beg);
+                // saving the number of attempts
+                file_blacklist >> attemptTime;
+                break;
+            }
+        }
+        
+        // closing blacklist
+        file_blacklist.close();
+    }
+    else
+    {
+        std::cerr << "Failed to open the file." << std::endl;
+    }
+
+    return attemptTime;
+}
+void Ldap_fh::writeNewUserInBlacklist(const std::string & username, const std::string & ip)
+{
+    // read and write in file_blacklist
+    std::fstream file_blacklist(this->blacklist, std::ios::in | std::ios::out);
+
+    // opening and writing file
+    if(file_blacklist.is_open())
+    {
+        // write username, ip, time, loginattempts, if not already in blacklist
         file_blacklist << username + "," 
-                        + ip + "," 
-                        + std::to_string(std::time(nullptr)) + ","
-                        + ;
-
+                    + ip + ",:"
+                    + std::to_string(1) + ","
+                    + std::to_string(std::time(nullptr)) + "\n";
+        
         // closing blacklist
         file_blacklist.close();
     }
@@ -166,7 +223,69 @@ void Ldap_fh::updateLoginAttempt(const std::string & username, const std::string
         std::cerr << "Failed to open the file." << std::endl;
     }
 }
-void Ldap_fh::resetLoginAttempt(const std::string & username, const std::string & ip)
+void Ldap_fh::updateLoginAttempt(const std::string & username, const std::string & ip, bool deleteUser = false)
 {
-    
+    int attempts = getLoginAttempts(username, ip);
+    time_t attemptTime = getAttemptTime(username, ip);
+    // read from file_blacklist
+    std::ifstream file_blacklist(this->blacklist);
+    // write in new file
+    std::ofstream file_temp("blacklist/temp.txt");
+    std::string line;
+    std::size_t positionString;
+
+    // calculating attempts
+    if(attempts < 3)
+    {
+        attempts++;         // user gets new warnings
+    }
+    else if(difftime(std::time(nullptr), attemptTime) >= 60 && attempts == 3)
+    {
+        attempts = 0;       // user is not more blacklisted
+        deleteUser = true;  // delete user entirely from blacklist
+    }
+
+    // reading old file and writing new file with updated information
+    while(getline(file_blacklist, line))
+    {
+        positionString = line.find(username + "," + ip);
+        if(positionString == std::string::npos)     // current line does not match the user line
+        {
+            file_temp << line;
+        }
+        else if(!deleteUser && positionString != std::string::npos) // write only, if deleteUser == false
+        {
+            file_temp << username + "," 
+                    + ip + ",:"
+                    + std::to_string(attempts) + ","
+                    + std::to_string(std::time(nullptr)) + "\n";
+        }
+    }
+
+    // closing files
+    file_blacklist.close();
+    file_temp.close();
+
+    // removing old blacklist
+    remove(this->blacklist.c_str());
+    // renaming new blacklist
+    rename("temp.txt", this->blacklist.c_str());
+}
+bool Ldap_fh::isUserInBlacklist(const std::string & username, const std::string & ip)
+{
+    std::ifstream file_blacklist(this->blacklist);
+    std::string line;
+    std::size_t positionString;
+
+    // opening and writing file
+    while(getline(file_blacklist, line))
+    {
+        positionString = line.find(username + "," + ip);
+        if(positionString != std::string::npos)     // current line matches with username and ip
+        {
+            return true;
+        }
+    }
+
+    return false;
 }

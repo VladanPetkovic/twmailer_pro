@@ -19,13 +19,14 @@ public:
     bool authenticateWithLdap(const std::string & username, const std::string & password);
     bool isUserBlacklisted(const std::string & username, const std::string & ip);
     int getLoginAttempts(const std::string & username, const std::string & ip);
-    void updateLoginAttempt(const std::string & username, const std::string & ip);
-    void resetLoginAttempt(const std::string & username, const std::string & ip);
+    time_t getAttemptTime(const std::string & username, const std::string & ip);
+    void writeNewUserInBlacklist(const std::string & username, const std::string & ip);
+    void updateLoginAttempt(const std::string & username, const std::string & ip, bool deleteUser);
+    bool isUserInBlacklist(const std::string & username, const std::string & ip);
 
 private:
     sem_t* semaphore;
     std::string blacklist = "blacklist/blacklist.txt";
-    std::string blacklist_log = "blacklist/blacklist_log.txt";
 };
 
 #endif // LDAP_FH_H

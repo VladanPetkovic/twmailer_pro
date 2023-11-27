@@ -181,21 +181,28 @@ void MailServer::handleLogin(int client_socket, SessionData & sessionInfo)
         {
             logMessage("User " + sessionInfo.username + " temporarily blacklisted.");
             new_buffer = "ERR\n";
-            return;
         }
-        else if(this->ldap_server.authenticateWithLdap(sessionInfo.username, password)) // user authenticated successfully
+        else if(this->ldap_server.authenticateWithLdap(sessionInfo.username, password.c_str())) // user authenticated successfully
         {
             logMessage("User authenticated with LDAP.");
             new_buffer = "OK\n";
-            this->ldap_server.resetLoginAttempt(sessionInfo.username, sessionInfo.ip);
         }
         else                                                                // user-authentication failed
         {
             logMessage("LDAP authentication failed.");
             new_buffer = "ERR\n";
-            this->ldap_server.updateLoginAttempt(sessionInfo.username, sessionInfo.ip);
+            if(this->ldap_server.isUserInBlacklist(sessionInfo.username, sessionInfo.ip)) // user in blacklist, but less than 3 attempts
+            {
+                this->ldap_server.updateLoginAttempt(sessionInfo.username, sessionInfo.ip, false);
+            }
+            else        // user not in blacklist --> make new entry
+            {
+                this->ldap_server.writeNewUserInBlacklist(sessionInfo.username, sessionInfo.ip);
+            }
         }
     }
+
+    std::cout << this->buffer << std::endl;
     
     memset(this->buffer, '\0', BUFFER_SIZE);
     if (send(client_socket, new_buffer.c_str(), new_buffer.size(), 0) == -1)
