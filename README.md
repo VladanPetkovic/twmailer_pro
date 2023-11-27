@@ -32,6 +32,26 @@ make clean
 ```
 
 ## Example Cases
+### Case 0: Login
+
+**Input:**
+
+```
+tom92
+password
+```
+
+**Server Response:**
+
+```
+OK
+```
+
+OR the submitted data are invalid:
+
+```
+ERR
+```
 
 ### Case 1: Sending a Message
 
@@ -39,7 +59,6 @@ make clean
 
 ```
 SEND
-john_doe
 alice_01
 Coffee Break
 Hi Alice,
@@ -69,7 +88,6 @@ ERR
 
 ```
 LIST
-vladan
 ```
 
 **Server Response:**
@@ -95,7 +113,6 @@ OR if the username is invalid or doesn't exist:
 
 ```
 READ
-john_doe
 1
 ```
 
@@ -103,7 +120,6 @@ john_doe
 
 ```
 OK
-john_doe
 peter_01
 Coffee Break
 Hi Peter,
@@ -124,7 +140,6 @@ ERR
 
 ```
 DEL
-alice_01
 1
 ```
 
