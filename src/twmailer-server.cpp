@@ -275,7 +275,7 @@ void MailServer::handleList(int client_socket, SessionData & sessionInfo)
             std::string subject;
             // Open the file for reading
             std::ifstream file(directoryName + "/" + entry->d_name);
-            int lineCountdown = 3;      // moving three lines down to SUBJECT
+            int lineCountdown = 2;      // moving two lines down to SUBJECT
 
             while(file && std::getline(file, line))    // check with file if file opened successfully
             {
@@ -349,18 +349,21 @@ void MailServer::handleDel(int client_socket, SessionData & sessionInfo)
 
     if(std::remove(filePath.c_str()) == 0)
     {
+        // unlock semaphore
+        sem_post(this->semaphore);
+
         logMessage("Message removed.");
         new_buffer = "OK\n";
     }
     else
     {
+        // unlock semaphore
+        sem_post(this->semaphore);
+
         logMessage();
         perror("Error deleting file");
         new_buffer = "ERR\n";
     }
-
-    // unlock semaphore
-    sem_post(this->semaphore);
 
     send(client_socket, new_buffer.c_str(), new_buffer.size(), 0);
 }
@@ -484,18 +487,18 @@ bool MailServer::storeMessage(std::string receiver)
     {
         if (mkdir(directoryName.c_str(), 0777) == 0)
         {
-            logMessage("Directory created successfully.");
-            
             // unlock semaphore
             sem_post(this->semaphore);
+
+            logMessage("Directory created successfully.");
             return createAndWriteFile(receiver);
         }
         else
         {
-            logMessage("Failed to create directory.");
-
             // unlock semaphore
             sem_post(this->semaphore);
+
+            logMessage("Failed to create directory.");
             return false;
         }
     }
