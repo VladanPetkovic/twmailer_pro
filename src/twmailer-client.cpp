@@ -153,12 +153,12 @@ bool MailClient::handleLogin()
     std::string response = this->buffer;
     if(response == "OK\n")
     {
-        std::cout << "OK\n";
+        std::cout << "\nOK\n";
         return true;
     }
     else
     {
-        std::cout << "ERR\n";
+        std::cout << "\nERR\n";
         return false;
     }
 }
@@ -237,7 +237,7 @@ void MailClient::handleList()
 void MailClient::handleRead()
 {
     int msg_num;
-    std::string output[4] = {"Sender", "Receiver", "Subject", "Message"};
+    std::string output[3] = {"Receiver", "Subject", "Message"};
     int outputCount = 0;
 
     // INPUT
@@ -264,7 +264,7 @@ void MailClient::handleRead()
         for(int i = 0; buffer[i] != '\0'; i++)
         {
             std::cout << buffer[i];
-            if(buffer[i] == '\n' && outputCount < 4)
+            if(buffer[i] == '\n' && outputCount < 3)
             {
                 std::cout << output[outputCount] << ": ";
                 outputCount++;

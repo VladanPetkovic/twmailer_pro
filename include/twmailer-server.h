@@ -31,15 +31,14 @@ public:
     void setSocketOptions();                                        // sets socketoptions
     void handleClient(int client_socket);                           // processes user input: either SEND, DEL,...
     void logMessage(const std::string & msg);                       // Utility function to print logs with timestamp
-    bool storeMessage(std::string sender, std::string receiver);    // storing a message one user has send
+    bool storeMessage(std::string receiver);                        // storing a message one user has send
     void checkDirectory(const std::string & message_store);         // checking if passed message_store exists
 
     enum LineBreakCount     // needed for finding sender, subject,... in this->buffer
-    {
-        SENDER = 1,         // for example: sender comes after 1 linebreak
-        RECEIVER = 2,       // receiver after two,...
-        SUBJECT = 3,
-        MESSAGE = 4
+    {                       // for example: receiver comes after 1 linebreak
+        RECEIVER = 1,       // receiver after two,...
+        SUBJECT = 2,
+        MESSAGE = 3
     };
 
     struct SessionData 
@@ -57,18 +56,18 @@ private:
     sem_t* semaphore;
     Ldap_fh ldap_server;
     
-    void handleLogin(int client_socket, SessionData & sessionInfo);// process "LOGIN"
+    void handleLogin(int client_socket, SessionData & sessionInfo); // process "LOGIN"
     void handleSend(int client_socket);                             // process "SEND"
-    void handleList(int client_socket);                             // process "LIST"
-    void handleRead(int client_socket);                             // process "READ"
-    void handleDel(int client_socket);                              // process "DEL"
+    void handleList(int client_socket, SessionData & sessionInfo);  // process "LIST"
+    void handleRead(int client_socket, SessionData & sessionInfo);  // process "READ"
+    void handleDel(int client_socket, SessionData & sessionInfo);   // process "DEL"
     std::string getSenderOrReceiver(int startPosition);             // return Username of sender or receiver
     int getStartPosOfString(LineBreakCount count);                  // returning start-position of sender, receiver, subject,...
     int getEndPosOfMessage(int startOfMessage);                     // returns end-position of a message
     int getFileCount(std::string username);                         // counts files of submitted user
     int getMaxMessageNumber(std::string username);                  // returns the max. Msg-number of one user --> make unique msg-numbers
     int getMessageNumber(int startOfMessageNumber);                 // returns Msg-number, which was submitted by user, from buffer
-    bool createAndWriteFile(std::string sender, std::string receiver);  //creating and writing file
+    bool createAndWriteFile(std::string receiver);                  //creating and writing file
     std::string getClientIP(int client_socket);                     // returns client-ip
 };
 

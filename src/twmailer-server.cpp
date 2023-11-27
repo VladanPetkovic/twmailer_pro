@@ -147,17 +147,17 @@ void MailServer::handleClient(int client_socket)
         // receiving LIST
         else if(strncmp(this->buffer, "LIST", 4) == 0)
         {
-            handleList(client_socket);
+            handleList(client_socket, sessionInfo);
         }
         // receiving READ
         else if(strncmp(this->buffer, "READ", 4) == 0)
         {
-            handleRead(client_socket);
+            handleRead(client_socket, sessionInfo);
         }
         // receiving DEL
         else if(strncmp(this->buffer, "DEL", 3) == 0)
         {
-            handleDel(client_socket);
+            handleDel(client_socket, sessionInfo);
         } 
 
    } while (strcmp(this->buffer, "QUIT") != 0);
@@ -174,8 +174,8 @@ void MailServer::handleLogin(int client_socket, SessionData & sessionInfo)
     } 
     else                        // buffer is not empty
     {
-        sessionInfo.username = getSenderOrReceiver(getStartPosOfString(SENDER));    // getting the string after first \n
-        password = getSenderOrReceiver(getStartPosOfString(RECEIVER));  // getting the string after second \n
+        sessionInfo.username = getSenderOrReceiver(getStartPosOfString(RECEIVER));    // getting the string after first \n
+        password = getSenderOrReceiver(getStartPosOfString(SUBJECT));  // getting the string after second \n
 
         if(this->ldap_server.isUserBlacklisted(sessionInfo.username, sessionInfo.ip))         // user is blacklisted
         {
@@ -201,8 +201,6 @@ void MailServer::handleLogin(int client_socket, SessionData & sessionInfo)
             }
         }
     }
-
-    std::cout << this->buffer << std::endl;
     
     memset(this->buffer, '\0', BUFFER_SIZE);
     if (send(client_socket, new_buffer.c_str(), new_buffer.size(), 0) == -1)
@@ -210,23 +208,9 @@ void MailServer::handleLogin(int client_socket, SessionData & sessionInfo)
         perror("Send error");
     }
 }
-std::string MailServer::getClientIP(int client_socket)
-{
-    struct sockaddr_in addr;
-    socklen_t addr_size = sizeof(struct sockaddr_in);
-    int res = getpeername(client_socket, (struct sockaddr *)&addr, &addr_size);
-    char clientip[20];
-    if (res != -1)
-    {
-        strcpy(clientip, inet_ntoa(addr.sin_addr));
-        return std::string(clientip);
-    }
-    return "";
-}
 void MailServer::handleSend(int client_socket)
 {
     std::string new_buffer;     // we do not use our this->buffer, because we are sending only 5 bytes
-    std::string sender;
     std::string receiver;
 
     if(this->buffer == nullptr) // buffer is empty
@@ -235,10 +219,9 @@ void MailServer::handleSend(int client_socket)
     } 
     else                        // buffer is not empty
     {
-        sender = getSenderOrReceiver(getStartPosOfString(SENDER));
         receiver = getSenderOrReceiver(getStartPosOfString(RECEIVER));
         
-        if(storeMessage(sender, receiver))
+        if(storeMessage(receiver))
         {
             logMessage("Message saved.");
             new_buffer = "OK\n";
@@ -256,11 +239,11 @@ void MailServer::handleSend(int client_socket)
         perror("Send error");
     }
 }
-void MailServer::handleList(int client_socket)
+void MailServer::handleList(int client_socket, SessionData & sessionInfo)
 {
     std::string new_buffer;
     std::string subject_buffer = "";
-    std::string username = getSenderOrReceiver(getStartPosOfString(SENDER));
+    std::string username = sessionInfo.username;
     std::string directoryName = this->message_store + "/" + username;
 
     DIR* dir = opendir(directoryName.c_str());
@@ -314,7 +297,7 @@ void MailServer::handleList(int client_socket)
 
     send(client_socket, new_buffer.c_str(), new_buffer.size(), 0);
 }
-void MailServer::handleRead(int client_socket)
+void MailServer::handleRead(int client_socket, SessionData & sessionInfo)
 {
     if (this->buffer == nullptr)
     {
@@ -323,8 +306,8 @@ void MailServer::handleRead(int client_socket)
         return;
     }
 
-    std::string username = getSenderOrReceiver(getStartPosOfString(SENDER));
-    int messageNumber = getMessageNumber(getStartPosOfString(RECEIVER));    // RECEIVER means 2 times \n, which is true for msg-number
+    std::string username = sessionInfo.username;
+    int messageNumber = getMessageNumber(getStartPosOfString(RECEIVER));    // RECEIVER means 1 time \n, which is true for msg-number
     std::string directoryName = this->message_store + "/" + username;
     std::string filePath = directoryName + "/" + std::to_string(messageNumber);
     std::ifstream file(filePath);
@@ -346,7 +329,7 @@ void MailServer::handleRead(int client_socket)
         send(client_socket, error_message.c_str(), error_message.size(), 0);
     }
 }
-void MailServer::handleDel(int client_socket)
+void MailServer::handleDel(int client_socket, SessionData & sessionInfo)
 {
     if(buffer == nullptr)
     {
@@ -355,8 +338,11 @@ void MailServer::handleDel(int client_socket)
         return;
     }
 
-    std::string username = getSenderOrReceiver(getStartPosOfString(SENDER));
-    int messageNumber = getMessageNumber(getStartPosOfString(RECEIVER));    // RECEIVER means 2 times \n, which is true for msg-number
+    // lock semaphore: files are being edited
+    sem_wait(this->semaphore);
+
+    std::string username = sessionInfo.username;
+    int messageNumber = getMessageNumber(getStartPosOfString(RECEIVER));    // RECEIVER means 1 time \n, which is true for msg-number
     std::string directoryName = this->message_store + "/" + username;
     std::string filePath = directoryName + "/" + std::to_string(messageNumber);
     std::string new_buffer;
@@ -372,6 +358,10 @@ void MailServer::handleDel(int client_socket)
         perror("Error deleting file");
         new_buffer = "ERR\n";
     }
+
+    // unlock semaphore
+    sem_post(this->semaphore);
+
     send(client_socket, new_buffer.c_str(), new_buffer.size(), 0);
 }
 int MailServer::getMessageNumber(int startOfMessageNumber)
@@ -407,6 +397,19 @@ std::string MailServer::getSenderOrReceiver(int startPosition)
 int MailServer::getServerSocket()
 {
     return this->server_socket;
+}
+std::string MailServer::getClientIP(int client_socket)
+{
+    struct sockaddr_in addr;
+    socklen_t addr_size = sizeof(struct sockaddr_in);
+    int res = getpeername(client_socket, (struct sockaddr *)&addr, &addr_size);
+    char clientip[20];
+    if (res != -1)
+    {
+        strcpy(clientip, inet_ntoa(addr.sin_addr));
+        return std::string(clientip);
+    }
+    return "";
 }
 int MailServer::getStartPosOfString(LineBreakCount count)
 {
@@ -445,11 +448,11 @@ int MailServer::getEndPosOfMessage(int startOfMessage)
 
     return messageEnd - 1;
 }
-bool MailServer::storeMessage(std::string sender, std::string receiver)
+bool MailServer::storeMessage(std::string receiver)
 {
     DIR* dir = opendir(this->message_store.c_str());
     struct dirent * ent; // struct for fileinput
-    std::string directoryName = this->message_store + "/" + sender;
+    std::string directoryName = this->message_store + "/" + receiver;
     bool folderFound = false;
 
     // checking if directory opening failed
@@ -459,6 +462,9 @@ bool MailServer::storeMessage(std::string sender, std::string receiver)
         return false;
     }
 
+    // lock semaphore: files are being edited
+    sem_wait(this->semaphore);
+
     // checking all entries in the directory
     while ((ent = readdir(dir)) != NULL)
     {
@@ -466,7 +472,10 @@ bool MailServer::storeMessage(std::string sender, std::string receiver)
         if(ent->d_type == DT_DIR && ent->d_name == receiver)
         {
             folderFound = true;
-            return createAndWriteFile(sender, receiver);
+
+            // unlock semaphore
+            sem_post(this->semaphore);
+            return createAndWriteFile(receiver);
         }
     }
 
@@ -476,19 +485,26 @@ bool MailServer::storeMessage(std::string sender, std::string receiver)
         if (mkdir(directoryName.c_str(), 0777) == 0)
         {
             logMessage("Directory created successfully.");
-            //   std::cout << "Directory created successfully." << std::endl;
-            return createAndWriteFile(sender, receiver);
+            
+            // unlock semaphore
+            sem_post(this->semaphore);
+            return createAndWriteFile(receiver);
         }
         else
         {
             logMessage("Failed to create directory.");
-            //   std::cout << "Failed to create directory." << std::endl;
+
+            // unlock semaphore
+            sem_post(this->semaphore);
             return false;
         }
     }
 
     // closing directory
     closedir(dir);
+
+    // unlock semaphore
+    sem_post(this->semaphore);
 
     return true;
 }
@@ -545,7 +561,7 @@ int MailServer::getMaxMessageNumber(std::string username)
 
     return maxNumber;
 }
-bool MailServer::createAndWriteFile(std::string sender, std::string receiver)
+bool MailServer::createAndWriteFile(std::string receiver)
 {
     int startPosOfMessage = getStartPosOfString(MESSAGE);
     int startPosOfSubject = getStartPosOfString(SUBJECT);
@@ -555,13 +571,16 @@ bool MailServer::createAndWriteFile(std::string sender, std::string receiver)
     // we added + 1, because getFileCount() can be 0 --> we want to start with 1 (as message number)
     int messageNumber = getMaxMessageNumber(receiver) + 1;
 
+    // lock semaphore: files are being edited
+    sem_wait(this->semaphore);
+    
     // Create a new file within the folder
     std::ofstream file(directoryName + std::string("/") + std::to_string(messageNumber));
 
     // opening and writing file
     if(file.is_open())
     {
-        file << sender << "\n" << receiver << "\n";
+        file << receiver << "\n";
         // write Subject
         for(    int i = startPosOfSubject; 
                 this->buffer[i] != '\0' && i < getStartPosOfString(MESSAGE) - 1; i++)
@@ -577,11 +596,18 @@ bool MailServer::createAndWriteFile(std::string sender, std::string receiver)
             file << buffer[i];
         }
         file.close();
+
+        // unlock semaphore
+        sem_post(this->semaphore);
+
         // File created successfully
         return true;
     }
     else
     {
+        // unlock semaphore
+        sem_post(this->semaphore);
+
         // Failed to create the file
         return false;
     }

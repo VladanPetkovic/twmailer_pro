@@ -7,6 +7,7 @@
 #include <cstring>          // strcpy() strlen() ...
 #include <ldap.h>           // LDAP-integration
 #include <ctime>            // for printing time -- view Examples.md for possible errors
+#include <sstream>          // for converting string to time_t
 #include <semaphore.h>      // needed for synchronization of processes
 #include <fcntl.h>          // needed for Semaphores
 
@@ -26,7 +27,7 @@ public:
 
 private:
     sem_t* semaphore;
-    std::string blacklist = "blacklist/blacklist.txt";
+    std::string blacklist = "blacklist/blacklist";
 };
 
 #endif // LDAP_FH_H

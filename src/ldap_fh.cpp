@@ -28,66 +28,87 @@ void Ldap_fh::logMessage(const std::string & msg = "")
 }
 bool Ldap_fh::authenticateWithLdap(const std::string& username, const std::string& password)
 {
-    LDAP *ldap = nullptr;
+    // Using provided source code from moodle
+
+    // LDAP config
+    // anonymous bind with user and pw empty
+    const char *ldapUri = "ldap://ldap.technikum-wien.at:389";
+    const int ldapVersion = LDAP_VERSION3;
+    LDAP *ldapHandle;
     LDAPMessage *searchResult = nullptr;
-    int connectResult;
+    int rc = 0;
+    char ldapBindUser[256];
+    sprintf(ldapBindUser, "uid=%s,ou=people,dc=technikum-wien,dc=at", username.c_str());
 
     try
     {
         // Initialize LDAP connection
-        connectResult = ldap_initialize(&ldap, "ldap://ldap.technikum.wien.at:389");
-        if (connectResult != LDAP_SUCCESS)
+        rc = ldap_initialize(&ldapHandle, ldapUri);
+        if (rc != LDAP_SUCCESS)
         {
             logMessage("LDAP connection failed.");
             throw std::runtime_error("LDAP connection initialization failed");
         }
 
-        // Set LDAP version
-        int ldapVersion = LDAP_VERSION3;
-        ldap_set_option(ldap, LDAP_OPT_PROTOCOL_VERSION, &ldapVersion);
+        ldap_set_option(ldapHandle, LDAP_OPT_PROTOCOL_VERSION, &ldapVersion);
 
-        // Bind anonymously to perform search
-        connectResult = ldap_sasl_bind_s(ldap, NULL, LDAP_SASL_SIMPLE, NULL, NULL, NULL, NULL);
-        if (connectResult != LDAP_SUCCESS)
+        if (rc != LDAP_SUCCESS)
         {
-            throw std::runtime_error("LDAP anonymous bind failed");
+            ldap_unbind_ext_s(ldapHandle, NULL, NULL);
+            throw std::runtime_error("ldap_set_option failed");
         }
 
-        // Search for the user
-        std::string searchFilter = "(uid=" + username + ")";
-        connectResult = ldap_search_ext_s(ldap, "dc=technikum-wien,dc=at", LDAP_SCOPE_SUBTREE,
-                                          searchFilter.c_str(), NULL, 0, NULL, NULL, NULL, LDAP_NO_LIMIT, &searchResult);
-
-        if (connectResult != LDAP_SUCCESS)
+        rc = ldap_start_tls_s(
+            ldapHandle,
+            NULL,
+            NULL);
+        if (rc != LDAP_SUCCESS)
         {
-            throw std::runtime_error("LDAP search failed");
+            ldap_unbind_ext_s(ldapHandle, NULL, NULL);
+            throw std::runtime_error("ldap_start_tls_s failed");
         }
 
-        // Check if user exists and get DN
-        LDAPMessage *entry = ldap_first_entry(ldap, searchResult);
-        if (entry == NULL)
+        // search settings
+        const char *ldapSearchBaseDomainComponent = "dc=technikum-wien,dc=at";
+        const char *ldapSearchFilter = ("(uid=" + username + ")").c_str();
+        ber_int_t ldapSearchScope = LDAP_SCOPE_SUBTREE;
+        const char *ldapSearchResultAttributes[] = {"uid", "cn", NULL};
+
+        BerValue bindCredentials;
+        bindCredentials.bv_val = (char *)password.c_str();
+        bindCredentials.bv_len = strlen(password.c_str());
+        BerValue *servercredp; // server's credentials
+        rc = ldap_sasl_bind_s(
+            ldapHandle,
+            ldapBindUser,
+            LDAP_SASL_SIMPLE,
+            &bindCredentials,
+            NULL,
+            NULL,
+            &servercredp);
+        if (rc != LDAP_SUCCESS)
         {
-            throw std::runtime_error("User not found in LDAP");
+            ldap_unbind_ext_s(ldapHandle, NULL, NULL);
+            throw std::runtime_error("ldap_sasl_bind_s failed");
         }
 
-        char *userDN = ldap_get_dn(ldap, entry);
-        if (userDN == NULL)
+        LDAPMessage *searchResult;
+        rc = ldap_search_ext_s(
+            ldapHandle,
+            ldapSearchBaseDomainComponent,
+            ldapSearchScope,
+            ldapSearchFilter,
+            (char **)ldapSearchResultAttributes,
+            0,
+            NULL,
+            NULL,
+            NULL,
+            500,
+            &searchResult);
+        if (rc != LDAP_SUCCESS)
         {
-            throw std::runtime_error("Failed to get user DN");
-        }
-
-        // Attempt to bind as the user
-        struct berval cred;
-        cred.bv_val = const_cast<char*>(password.c_str());
-        cred.bv_len = password.length();
-
-        // Attempt to bind as the user
-        connectResult = ldap_sasl_bind_s(ldap, userDN, LDAP_SASL_SIMPLE, &cred, NULL, NULL, NULL);
-        ldap_memfree(userDN);
-
-        if (connectResult != LDAP_SUCCESS)
-        {
-            throw std::runtime_error("LDAP user bind failed");
+            ldap_unbind_ext_s(ldapHandle, NULL, NULL);
+            throw std::runtime_error("ldap_search_ext_s failed");
         }
 
         // Successful authentication
@@ -96,16 +117,23 @@ bool Ldap_fh::authenticateWithLdap(const std::string& username, const std::strin
     catch (const std::exception& e)
     {
         logMessage(std::string("LDAP authentication error: ") + e.what());
+        return false;
     }
     
     // Free LDAP resources in all scenarios
-    if (searchResult) ldap_msgfree(searchResult);
-    if (ldap) ldap_unbind_ext_s(ldap, NULL, NULL);
-
+    if(searchResult)
+    {
+        ldap_msgfree(searchResult);
+    } 
+    if(ldapHandle)
+    {
+        ldap_unbind_ext_s(ldapHandle, NULL, NULL);
+    }
     return false;
 }
 bool Ldap_fh::isUserBlacklisted(const std::string & username, const std::string & ip)
 {
+    // checks and updates the blacklist
     if(!isUserInBlacklist(username, ip))
     {
         return false;
@@ -114,7 +142,7 @@ bool Ldap_fh::isUserBlacklisted(const std::string & username, const std::string 
     {
         time_t attemptTime = getAttemptTime(username, ip);
         
-        if(getAttemptTime(username, ip) == 3 && difftime(std::time(nullptr), attemptTime) >= 60)
+        if(difftime(std::time(nullptr), attemptTime) >= 60)
         {
             updateLoginAttempt(username, ip, true);
             return false;
@@ -129,27 +157,22 @@ bool Ldap_fh::isUserBlacklisted(const std::string & username, const std::string 
 }
 int Ldap_fh::getLoginAttempts(const std::string & username, const std::string & ip)
 {
-    int prefixLength = username.length() + ip.length() + 3; // adding 3 for "," and ",:"
     int attempts = 0;
+    char input;
+    std::string line;
     // read file_blacklist
-    std::ifstream file_blacklist(this->blacklist, std::ios::in | std::ios::out);
+    std::ifstream file_blacklist(this->blacklist);
 
     // opening and writing file
     if(file_blacklist.is_open())
     {
         // search for username and ip
-        std::string line;
         std::streampos positionTemp = 0;
-        std::size_t positionString;
         while(getline(file_blacklist, line))
         {
             positionTemp = file_blacklist.tellg();
-            positionString = line.find(username + "," + ip);
-            if(positionString != std::string::npos)
+            if(line.find(username + "," + ip) != std::string::npos)
             {
-                file_blacklist.seekg(positionString + prefixLength, std::ios::beg);
-                // saving the number of attempts
-                file_blacklist >> attempts;
                 break;
             }
         }
@@ -161,32 +184,33 @@ int Ldap_fh::getLoginAttempts(const std::string & username, const std::string & 
     {
         std::cerr << "Failed to open the file." << std::endl;
     }
+
+    // convert string line to int attempts
+    size_t position = line.find(':');
+    position++;
+    input = line[position];
+    attempts = input - '0';
 
     return attempts;
 }
 time_t Ldap_fh::getAttemptTime(const std::string & username, const std::string & ip)
 {
-    int prefixLength = username.length() + ip.length() + 5; // adding 5 for "," and ",:" and "," and the attemptnumber
     time_t attemptTime;
+    std::string line;
+    std::string input;
     // read file_blacklist
-    std::ifstream file_blacklist(this->blacklist, std::ios::in | std::ios::out);
+    std::ifstream file_blacklist(this->blacklist);
 
     // opening and writing file
     if(file_blacklist.is_open())
     {
         // search for username and ip
-        std::string line;
         std::streampos positionTemp = 0;
-        std::size_t positionString;
         while(getline(file_blacklist, line))
         {
             positionTemp = file_blacklist.tellg();
-            positionString = line.find(username + "," + ip);
-            if(positionString != std::string::npos)
+            if(line.find(username + "," + ip) != std::string::npos)
             {
-                file_blacklist.seekg(positionString + prefixLength, std::ios::beg);
-                // saving the number of attempts
-                file_blacklist >> attemptTime;
                 break;
             }
         }
@@ -199,12 +223,24 @@ time_t Ldap_fh::getAttemptTime(const std::string & username, const std::string &
         std::cerr << "Failed to open the file." << std::endl;
     }
 
+    // convert String line to time_t
+    size_t position = line.find(':');
+    position += 3;
+    input = line.substr(position, 10);  // length of time-string == 10
+    int seconds;
+    std::istringstream secondsStream(input);
+    secondsStream >> seconds;
+    attemptTime = static_cast<time_t>(seconds);
+
     return attemptTime;
 }
 void Ldap_fh::writeNewUserInBlacklist(const std::string & username, const std::string & ip)
 {
-    // read and write in file_blacklist
-    std::fstream file_blacklist(this->blacklist, std::ios::in | std::ios::out);
+    // lock semaphore: files are being edited
+    sem_wait(this->semaphore);
+
+    // append new entry in file_blacklist
+    std::ofstream file_blacklist(this->blacklist, std::ios::app);
 
     // opening and writing file
     if(file_blacklist.is_open())
@@ -222,15 +258,21 @@ void Ldap_fh::writeNewUserInBlacklist(const std::string & username, const std::s
     {
         std::cerr << "Failed to open the file." << std::endl;
     }
+
+    // unlock semaphore
+    sem_post(this->semaphore);
 }
-void Ldap_fh::updateLoginAttempt(const std::string & username, const std::string & ip, bool deleteUser = false)
+void Ldap_fh::updateLoginAttempt(const std::string & username, const std::string & ip, bool deleteUser)
 {
+    // lock semaphore: files are being edited
+    sem_wait(this->semaphore);
+
     int attempts = getLoginAttempts(username, ip);
     time_t attemptTime = getAttemptTime(username, ip);
     // read from file_blacklist
     std::ifstream file_blacklist(this->blacklist);
     // write in new file
-    std::ofstream file_temp("blacklist/temp.txt");
+    std::ofstream file_temp("blacklist/temp");
     std::string line;
     std::size_t positionString;
 
@@ -241,7 +283,7 @@ void Ldap_fh::updateLoginAttempt(const std::string & username, const std::string
     }
     else if(difftime(std::time(nullptr), attemptTime) >= 60 && attempts == 3)
     {
-        attempts = 0;       // user is not more blacklisted
+        attempts = 1;       // user is not more blacklisted
         deleteUser = true;  // delete user entirely from blacklist
     }
 
@@ -251,7 +293,8 @@ void Ldap_fh::updateLoginAttempt(const std::string & username, const std::string
         positionString = line.find(username + "," + ip);
         if(positionString == std::string::npos)     // current line does not match the user line
         {
-            file_temp << line;
+            file_temp << line + "\n";
+
         }
         else if(!deleteUser && positionString != std::string::npos) // write only, if deleteUser == false
         {
@@ -269,7 +312,10 @@ void Ldap_fh::updateLoginAttempt(const std::string & username, const std::string
     // removing old blacklist
     remove(this->blacklist.c_str());
     // renaming new blacklist
-    rename("temp.txt", this->blacklist.c_str());
+    rename("blacklist/temp", this->blacklist.c_str());
+
+    // unlock semaphore
+    sem_post(this->semaphore);
 }
 bool Ldap_fh::isUserInBlacklist(const std::string & username, const std::string & ip)
 {
@@ -283,6 +329,8 @@ bool Ldap_fh::isUserInBlacklist(const std::string & username, const std::string 
         positionString = line.find(username + "," + ip);
         if(positionString != std::string::npos)     // current line matches with username and ip
         {
+            // closing files
+            file_blacklist.close();
             return true;
         }
     }
